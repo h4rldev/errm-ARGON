@@ -1,0 +1,76 @@
+set quiet
+set shell := ["bash", "-c"]
+
+c_flags_mac := "-I/opt/local/include"
+ld_flags_mac := "-L/opt/local/lib"
+
+prod_c_flags := "-O2 -flto"
+prod_link := "-Wl,-O2 -flto"
+
+debug_c_flags := "-ggdb -g -Og"
+debug_link := debug_c_flags + " -Wl,--no-as-needed -Wl,--gc-sections -Wl,-z,relro -Wl,-z,now"
+
+green := "\\x1b[32m"
+red := "\\x1b[31m"
+clear := "\\x1b[0m"
+
+argon_available := shell("if pkg-config --exists libargon2 2>/dev/null; then echo yes; else echo no; fi")
+
+__print_yes:
+    echo -ne "{{ green }}yes{{ clear }}"
+
+__print_no:
+    echo -ne "{{ red }}no{{ clear }}"
+
+__print_missing:
+    echo -e "[{{ red }}lib missing{{ clear }}]"
+
+clean_nifs:
+    rm priv/*
+
+build_nifs profile="debug": (build_argon_if_available profile)
+    echo -ne "priv/errm_argon_nif.so -> exists: "
+    if [ -f "priv/errm_argon_nif.so" ]; then just __print_yes; echo ''; else just __print_no; {{ if argon_available == "yes" { "echo ''; echo 'build_failed' > 'check.txt';" } else { "echo -n ' '; just __print_missing;" } }} fi;
+    if [ -f "check.txt" ]; then rm "check.txt"; echo -e "build_nifs: Some builds {{ red }}failed{{ clear }}"; fi
+
+build_argon_if_available profile="debug":
+    #!/usr/bin/env bash
+
+    if [[ {{ argon_available }} == "no" ]]; then
+      echo -e 'libargon2 not found, youll need it installed'; exit 0;
+    else
+      just build_argon {{ profile }}
+    fi
+
+[unix]
+build_argon profile="debug":
+    echo -e "Using profile: {{ profile }}"
+    mkdir -p priv
+    if gcc -o priv/errm_argon_nif.so -shared -fPIC \
+      {{ if profile == "prod" { prod_c_flags } else { debug_c_flags } }} \
+      -I${ERL_ROOT}/usr/include -L${ERL_ROOT}/usr/lib \
+      {{ if profile == "prod" { prod_link } else { debug_link } }} \
+      -largon2 c_src/errm_argon_nif.c; then \
+    echo -e "c_src/errm_argon_nif.c   -> priv/errm_argon_nif.so   [{{ green }}done{{ clear }}]"; \
+    {{ if profile == "prod" { "strip --strip-unneeded priv/errm_argon_nif.so;" } else { "echo -e 'Skipping strip...';" } }} \
+    else \
+    echo -e "c_src/errm_argon_nif.c   -> priv/errm_argon_nif.so   [{{ red }}failed{{ clear }}]"; \
+    fi
+
+[macos]
+build_argon profile="debug":
+    echo -e "Using profile: {{ profile }}"
+    mkdir -p priv
+    if gcc -o priv/errm_argon_nif.so -shared -fPIC \
+      {{ if profile == "prod" { c_flags_mac + " " + prod_c_flags } else { c_flags_mac + " " + debug_c_flags } }} \
+      -I${ERL_ROOT}/usr/include -L${ERL_ROOT}/usr/lib \
+      {{ if profile == "prod" { ld_flags_mac + " " + prod_link } else { ld_flags_mac + " " + debug_link } }} \
+      -largon2 c_src/errm_argon_nif.c; then \
+    echo -e "c_src/errm_argon_nif.c   -> priv/errm_argon_nif.so   [{{ green }}done{{ clear }}]"; \
+    {{ if profile == "prod" { "strip --strip-unneeded priv/errm_argon_nif.so;" } else { "echo -e 'Skipping strip...';" } }} \
+    else \
+    echo -e "c_src/errm_argon_nif.c   -> priv/errm_argon_nif.so   [{{ red }}failed{{ clear }}]"; \
+    fi
+
+bear:
+    bear -- just build_nifs

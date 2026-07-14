@@ -1,0 +1,13 @@
+{application, errm_argon, [
+    {description, "Errm... ARGON! - a small library providing argon2id hashing and verification."},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["BSD-3"]},
+    {links, [{"Codeberg", "https://codeberg.org/h4rl/errm-ARGON"}]}
+ ]}.
