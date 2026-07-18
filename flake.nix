@@ -63,7 +63,7 @@
       buildInputs = with pkgs; [
         beamPackages.erlang
         beamPackages.rebar3
-        #libargon2
+        libargon2
         pkg-config
       ];
 
